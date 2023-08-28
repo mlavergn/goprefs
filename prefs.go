@@ -16,36 +16,50 @@ const (
 	` + "\n"
 )
 
-type FileType int
+type ContentType int
 
 const (
-	PreferenceXML FileType = iota
-	ConfigXML
-	ConfigJSON
+	Preferences ContentType = iota
+	Config
+)
+
+type ContainerType int
+
+const (
+	XML ContainerType = iota
+	JSON
 )
 
 type Prefs struct {
-	contents PList
-	data     map[string]interface{}
-	FileType FileType
+	Contents      PList
+	ContentType   ContentType
+	ContainerType ContainerType
+	KV            map[string]any
 }
 
 type PList struct {
-	Plist   string                 `xml:"plist"`
-	Version string                 `xml:"version,attr"`
-	Dict    map[string]interface{} `xml:"dict"`
+	XMLName xml.Name `xml:"plist"`
+	Version string   `xml:"version,attr"`
+	Dict    Dict     `xml:"dict"`
+}
+
+type Dict struct {
+	XMLName xml.Name `xml:"dict"`
+	Key     []string `xml:"key"`
+	Date    []string `xml:"date"`
 }
 
 func (id *Prefs) Load(fileName string) (bool, error) {
 	path, err := id.prefsPath(fileName)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Load read failure", err)
 		return false, err
 	}
-	id.contents, err = id.deserializeXML(data)
+	// log.Println(string(data))
+	id.Contents, err = id.deserializeXML(data)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Load deserialize failure", err)
 		return false, err
 	}
 	return true, nil
@@ -54,20 +68,25 @@ func (id *Prefs) Load(fileName string) (bool, error) {
 func (id *Prefs) Save(fileName string) (bool, error) {
 	path, err := id.prefsPath(fileName)
 
-	data, err := id.serializeXML(path, id.contents)
+	data, err := id.serializeXML(path, id.Contents)
 	if err != nil {
+		log.Fatal("Save serialize failure", err)
 		return false, err
 	}
-	ioutil.WriteFile(path, data, 644)
+	err = ioutil.WriteFile(path, data, 644)
+	if err != nil {
+		log.Fatal("Save write failure", err)
+		return false, err
+	}
 	return true, nil
 }
 
 func (id *Prefs) prefsPath(prefsFile string) (string, error) {
-	if id.FileType != PreferenceXML {
+	if id.ContentType != Preferences {
 		cwd, err := os.Getwd()
 		prefsPath := path.Join(cwd, prefsFile+".plist")
-		log.Println(prefsPath)
 		if err != nil {
+			log.Fatal("prefsPath cwd failure", err)
 			return "", err
 		}
 		return prefsPath, nil
@@ -89,10 +108,10 @@ func (id *Prefs) prefsPath(prefsFile string) (string, error) {
 		}
 
 		result := path.Join(prefsPath, prefsFile)
-
 		return result, nil
 	}
 
+	log.Fatal("prefsPath failure", err)
 	return "", err
 }
 
@@ -100,6 +119,7 @@ func (id *Prefs) deserializeXML(contents []byte) (PList, error) {
 	var result PList
 	err := xml.Unmarshal(contents, &result)
 	if err != nil {
+		log.Fatal("deserializeXML failure", err)
 		return PList{}, err
 	}
 
@@ -108,22 +128,31 @@ func (id *Prefs) deserializeXML(contents []byte) (PList, error) {
 
 func (id *Prefs) serializeXML(prefsPath string, content PList) ([]byte, error) {
 	data, err := xml.MarshalIndent(content, "", "        ")
-	data = []byte(xml.Header + DOCTYPE + string(data))
+	if err != nil {
+		log.Fatal("serializeXML failure", err)
+		return nil, err
+	}
 
-	err = ioutil.WriteFile(prefsPath, data, 644)
+	data = []byte(xml.Header + DOCTYPE + string(data))
 	return data, err
 }
 
-func (id *Prefs) deserializeJSON(contents []byte) (result map[string]interface{}, err error) {
-	err = json.Unmarshal(contents, &result)
+func (id *Prefs) deserializeJSON(contents []byte) (PList, error) {
+	var result PList
+	err := json.Unmarshal(contents, &result)
 	if err != nil {
-		return nil, err
+		log.Fatal("deserializeJSON failure", err)
+		return PList{}, err
 	}
 
 	return result, nil
 }
 
-func (id *Prefs) serializeJSON(fileName string, content map[string]interface{}) ([]byte, error) {
+func (id *Prefs) serializeJSON(fileName string, content PList) ([]byte, error) {
 	data, err := json.Marshal(content)
+	if err != nil {
+		log.Fatal("serializeJSON failure", err)
+		return nil, err
+	}
 	return data, err
 }

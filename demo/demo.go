@@ -6,8 +6,7 @@ import (
 )
 
 func main() {
-	prefs := Prefs{}
-	prefs.FileType = ConfigXML
+	prefs := Prefs{ContainerType: XML, ContentType: Config}
 	prefs.Load("demo")
-	log.Println(prefs)
+	log.Println(prefs.Contents.Dict)
 }
