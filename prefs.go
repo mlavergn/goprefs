@@ -3,12 +3,14 @@ package goprefs
 import (
 	"encoding/json"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
 	"path"
 	"runtime"
+	"strings"
 )
 
 const (
@@ -49,6 +51,34 @@ type Dict struct {
 	Date    []string `xml:"date"`
 }
 
+func (id *Prefs) CustomDecoder(fileName string) (bool, error) {
+	path, err := id.prefsPath(fileName)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal("CustomDecoder read failure", err)
+		return false, err
+	}
+
+	dec := xml.NewDecoder(strings.NewReader(string(data)))
+
+	type Message struct {
+		Data []string `xml:"dict>key|date"`
+	}
+
+	// log.Println(string(data))
+
+	for {
+		var m Message
+		if err := dec.Decode(&m); err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatal("CustomDecoder decode failure", err)
+		}
+		log.Println(m)
+	}
+	return true, nil
+}
+
 func (id *Prefs) Load(fileName string) (bool, error) {
 	path, err := id.prefsPath(fileName)
 	data, err := ioutil.ReadFile(path)
@@ -73,7 +103,7 @@ func (id *Prefs) Save(fileName string) (bool, error) {
 		log.Fatal("Save serialize failure", err)
 		return false, err
 	}
-	err = ioutil.WriteFile(path, data, 644)
+	err = ioutil.WriteFile(path, data, 0644)
 	if err != nil {
 		log.Fatal("Save write failure", err)
 		return false, err
@@ -127,7 +157,7 @@ func (id *Prefs) deserializeXML(contents []byte) (PList, error) {
 }
 
 func (id *Prefs) serializeXML(prefsPath string, content PList) ([]byte, error) {
-	data, err := xml.MarshalIndent(content, "", "        ")
+	data, err := xml.MarshalIndent(content, "", "    ")
 	if err != nil {
 		log.Fatal("serializeXML failure", err)
 		return nil, err
